@@ -9,6 +9,8 @@
 
 基于人工智能的农作物病害识别与精准农业服务平台，助力乡村振兴
 
+**[English](./README_EN.md) | 简体中文**
+
 </div>
 
 ---
@@ -88,12 +90,24 @@ export QWEN_API_KEY="your_api_key_here"
 
 ```
 project/
-├── api.py                    # 核心算法实现
-├── test_rice.jpg            # 水稻测试图片
-├── result_test_rice.json    # 示例检测结果
-├── AGENTS.md                # 技术文档
-├── Prospectus.md            # 项目执行手册
-└── README.md                # 项目说明文档（本文件）
+├── src/                        # 源代码目录
+│   ├── config.py               # 项目配置
+│   ├── detectors/              # 检测器模块
+│   │   ├── mock_detector.py    # 模拟检测器
+│   │   ├── qwen_detector.py    # 通义千问API检测器
+│   │   └── hybrid_detector.py  # 混合检测器
+│   └── utils/                  # 工具函数
+├── uploads/                    # 图片上传目录
+├── results/                    # 检测结果存储
+├── tests/                      # 测试文件目录
+│   └── test_rice.jpg          # 水稻测试图片
+├── app.py                      # Web服务入口
+├── run.py                      # 命令行工具
+├── requirements.txt            # 项目依赖
+├── AGENTS.md                   # 技术文档
+├── Prospectus.md               # 项目执行手册
+├── README.md                   # 项目说明文档（本文件）
+└── README_EN.md                # English Documentation
 ```
 
 ---
