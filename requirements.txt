@@ -1,0 +1,11 @@
+# 慧眼巡田 - 项目依赖
+
+# HTTP 请求库
+requests>=2.31.0
+
+# Web 框架
+Flask>=3.0.0
+Werkzeug>=3.0.0
+
+# 工具库
+urllib3>=2.0.0
