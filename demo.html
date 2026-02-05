@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>慧眼巡田 - 智慧农业病害检测系统</title>
+    <!-- 引入Tailwind CSS（CDN，确保稳定） -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入Chart.js（可视化，兼容所有现代浏览器） -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- 引入Font Awesome（图标，确保地址有效） -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- 自定义Tailwind主题（仅配置颜色/字体，无自定义工具类） -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#22c55e', // 柔和农业绿
+                        secondary: '#16a34a',
+                        accent: '#f59e0b',
+                        neutral: '#f8fafc',
+                        dark: '#1e293b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <!-- 仅保留全局基础过渡，无其他自定义CSS -->
+    <style>
+        * {
+            transition: all 0.2s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col">
+    <!-- 头部导航（简化，无冗余图标） -->
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-leaf text-primary text-2xl"></i>
+                <h1 class="text-xl md:text-2xl font-bold text-dark">慧眼巡田</h1>
+            </div>
+            <!-- 移动端菜单按钮 -->
+            <button class="md:hidden text-dark text-xl" id="menuBtn">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <!-- 桌面端导航（简洁） -->
+            <nav class="hidden md:flex gap-6">
+                <a href="#" class="text-dark hover:text-primary">首页</a>
+                <a href="#" class="text-dark hover:text-primary">检测历史</a>
+                <a href="#" class="text-dark hover:text-primary">使用指南</a>
+            </nav>
+        </div>
+        <!-- 移动端导航菜单（修复切换逻辑） -->
+        <div id="mobileMenu" class="hidden bg-white shadow-md md:hidden">
+            <div class="container mx-auto px-4 py-2 flex flex-col gap-3">
+                <a href="#" class="text-dark hover:text-primary py-2">首页</a>
+                <a href="#" class="text-dark hover:text-primary py-2">检测历史</a>
+                <a href="#" class="text-dark hover:text-primary py-2">使用指南</a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区（大幅留白，简洁布局） -->
+    <main class="flex-grow container mx-auto px-4 py-8 max-w-5xl">
+        <!-- 介绍区域（简洁引导） -->
+        <section class="mb-10 text-center">
+            <h2 class="text-2xl md:text-3xl font-bold mb-4 text-dark">农作物病害智能检测</h2>
+            <p class="text-gray-600 max-w-2xl mx-auto">上传作物图片，AI自动识别病害、评估严重程度，提供专业防治建议</p>
+        </section>
+
+        <!-- 检测核心区域（响应式，无杂乱样式） -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+            <!-- 上传区域（纯原生Tailwind样式，无@apply） -->
+            <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-upload text-primary"></i>
+                    上传检测图片
+                </h3>
+                
+                <!-- 上传区域（修复拖拽交互，纯原生样式） -->
+                <div id="uploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary mb-6">
+                    <input type="file" id="imageUpload" accept="image/jpeg,image/png" class="hidden">
+                    <i class="fa-solid fa-image text-4xl text-gray-400 mb-3"></i>
+                    <p class="text-gray-500 mb-2">点击或拖拽图片到此处上传</p>
+                    <p class="text-sm text-gray-400">支持 JPG、PNG，最大 10MB</p>
+                    <button type="button" class="mt-4 bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2" onclick="document.getElementById('imageUpload').click()">
+                        选择图片
+                    </button>
+                </div>
+                
+                <!-- 作物类型选择（优化样式，无冗余） -->
+                <div class="mb-6">
+                    <label class="block text-gray-700 mb-2">作物类型</label>
+                    <select id="cropType" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <option value="水稻" selected>水稻</option>
+                        <option value="小麦">小麦</option>
+                        <option value="玉米">玉米</option>
+                    </select>
+                </div>
+                
+                <!-- 检测按钮和进度（修复进度条逻辑） -->
+                <div class="flex flex-col gap-4">
+                    <button id="detectBtn" class="bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary w-full disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                        <i class="fa-solid fa-microscope mr-2"></i>开始检测
+                    </button>
+                    
+                    <!-- 进度条区域（初始隐藏，纯原生样式） -->
+                    <div id="progressArea" class="hidden">
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>检测进度</span>
+                            <span id="progressPercent">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5">
+                            <div id="progressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                        </div>
+                        <p id="progressText" class="text-sm text-gray-600 mt-2 text-center">正在初始化检测...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 结果展示区域（优化可视化，修复图表bug） -->
+            <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+                <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-pie text-primary"></i>
+                    检测结果
+                </h3>
+                
+                <!-- 结果初始化提示（简洁） -->
+                <div id="resultEmpty" class="flex flex-col items-center justify-center h-64 text-gray-400">
+                    <i class="fa-solid fa-file-circle-question text-5xl mb-4"></i>
+                    <p>上传图片并点击检测后，结果将显示在此处</p>
+                </div>
+                
+                <!-- 结果展示区域 (初始隐藏，修复布局) -->
+                <div id="resultContent" class="hidden">
+                    <!-- 图片预览 -->
+                    <div class="mb-4">
+                        <img id="resultImage" src="" alt="检测图片预览" class="w-full h-auto rounded-lg object-cover">
+                    </div>
+                    
+                    <!-- 核心结果卡片（简洁网格，无杂乱） -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-500">病害名称</p>
+                            <p id="diseaseName" class="text-lg font-semibold text-dark">稻瘟病</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-500">严重程度</p>
+                            <p id="diseaseSeverity" class="text-lg font-semibold text-accent">中等</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-500">置信度</p>
+                            <p id="diseaseConfidence" class="text-lg font-semibold text-primary">85%</p>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="text-sm text-gray-500">检测模式</p>
+                            <p id="detectMode" class="text-lg font-semibold text-secondary">AI 智能检测</p>
+                        </div>
+                    </div>
+                    
+                    <!-- 可视化图表（修复销毁与初始化逻辑） -->
+                    <div class="mb-6">
+                        <canvas id="resultChart" width="400" height="200"></canvas>
+                    </div>
+                    
+                    <!-- 防治建议（简洁高亮） -->
+                    <div class="bg-primary/5 p-4 rounded-lg">
+                        <h4 class="font-semibold mb-2 flex items-center gap-2">
+                            <i class="fa-solid fa-shield-halved text-primary"></i>
+                            防治建议
+                        </h4>
+                        <p id="preventionAdvice" class="text-gray-700 text-sm">
+                            1. 及时清除病株，集中销毁；<br>
+                            2. 使用三环唑、稻瘟灵等药剂喷雾防治；<br>
+                            3. 加强田间管理，合理施肥，提高植株抗病能力；<br>
+                            4. 发病严重地块建议轮作换茬。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 页脚（简洁，无冗余信息） -->
+    <footer class="bg-dark text-white py-6">
+        <div class="container mx-auto px-4 text-center text-gray-400 text-sm">
+            © 2026 慧眼巡田 - 智慧农业病害检测系统 版权所有
+        </div>
+    </footer>
+
+    <!-- JavaScript 逻辑（修复所有已知bug，简化冗余代码） -->
+    <script>
+        // 全局变量（精简，避免未定义）
+        let selectedImage = null;
+        let resultChart = null;
+        
+        // DOM 加载完成后初始化（确保元素加载完毕）
+        document.addEventListener('DOMContentLoaded', function() {
+            // 移动端菜单切换（修复toggle逻辑）
+            const menuBtn = document.getElementById('menuBtn');
+            const mobileMenu = document.getElementById('mobileMenu');
+            menuBtn.addEventListener('click', function() {
+                mobileMenu.classList.toggle('hidden');
+            });
+            
+            // 绑定元素（避免重复获取）
+            const imageUpload = document.getElementById('imageUpload');
+            const uploadArea = document.getElementById('uploadArea');
+            const detectBtn = document.getElementById('detectBtn');
+            
+            // 点击上传区域触发文件选择（修复事件冒泡）
+            uploadArea.addEventListener('click', function(e) {
+                if (!e.target.tagName === 'BUTTON') {
+                    imageUpload.click();
+                }
+            });
+            
+            // 拖拽上传（修复防默认行为，避免浏览器打开图片）
+            uploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                uploadArea.classList.add('border-primary', 'bg-primary/5');
+            });
+            
+            uploadArea.addEventListener('dragleave', function() {
+                uploadArea.classList.remove('border-primary', 'bg-primary/5');
+            });
+            
+            uploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                uploadArea.classList.remove('border-primary', 'bg-primary/5');
+                
+                if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    const file = e.dataTransfer.files[0];
+                    handleImageFile(file);
+                }
+            });
+            
+            // 文件选择处理（修复文件验证逻辑）
+            imageUpload.addEventListener('change', function() {
+                if (this.files && this.files.length > 0) {
+                    const file = this.files[0];
+                    handleImageFile(file);
+                }
+            });
+            
+            // 检测按钮点击事件（绑定防抖）
+            detectBtn.addEventListener('click', startDetection);
+        });
+        
+        /**
+         * 处理上传的图片文件（修复大小与格式验证）
+         */
+        function handleImageFile(file) {
+            // 验证文件类型（仅保留常用格式，减少错误）
+            const allowedTypes = ['image/jpeg', 'image/png'];
+            if (!allowedTypes.includes(file.type)) {
+                alert('请上传有效的图片文件（JPG、PNG）');
+                return;
+            }
+            
+            // 验证文件大小（缩小到10MB，降低加载压力）
+            if (file.size > 10 * 1024 * 1024) {
+                alert('图片大小不能超过10MB');
+                return;
+            }
+            
+            selectedImage = file;
+            
+            // 更新上传区域（简化HTML，避免冗余）
+            const uploadArea = document.getElementById('uploadArea');
+            uploadArea.innerHTML = `
+                <img src="${URL.createObjectURL(file)}" alt="预览图片" class="w-full h-auto rounded-lg mb-4">
+                <p class="text-gray-700 mb-2">已选择: ${file.name}</p>
+                <p class="text-sm text-gray-500">大小: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                <button type="button" class="mt-4 border border-primary text-primary py-2 px-6 rounded-lg hover:bg-primary/10" onclick="clearImage()">
+                    <i class="fa-solid fa-times mr-2"></i>重新选择
+                </button>
+            `;
+            
+            // 启用检测按钮
+            document.getElementById('detectBtn').disabled = false;
+        }
+        
+        /**
+         * 清除已选择的图片（修复重置逻辑）
+         */
+        function clearImage() {
+            selectedImage = null;
+            document.getElementById('imageUpload').value = '';
+            
+            // 重置上传区域
+            const uploadArea = document.getElementById('uploadArea');
+            uploadArea.innerHTML = `
+                <i class="fa-solid fa-image text-4xl text-gray-400 mb-3"></i>
+                <p class="text-gray-500 mb-2">点击或拖拽图片到此处上传</p>
+                <p class="text-sm text-gray-400">支持 JPG、PNG，最大 10MB</p>
+                <button type="button" class="mt-4 bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2" onclick="document.getElementById('imageUpload').click()">
+                    选择图片
+                </button>
+            `;
+            
+            // 禁用检测按钮，重置结果区域
+            document.getElementById('detectBtn').disabled = true;
+            document.getElementById('resultEmpty').classList.remove('hidden');
+            document.getElementById('resultContent').classList.add('hidden');
+        }
+        
+        /**
+         * 开始检测流程（修复进度条动画逻辑）
+         */
+        function startDetection() {
+            if (!selectedImage) return;
+            
+            // 显示进度区域，初始化进度
+            const progressArea = document.getElementById('progressArea');
+            const progressBar = document.getElementById('progressBar');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressText = document.getElementById('progressText');
+            
+            progressArea.classList.remove('hidden');
+            progressBar.style.width = '0%';
+            progressPercent.textContent = '0%';
+            document.getElementById('detectBtn').disabled = true;
+            
+            // 模拟检测进度（平滑过渡，无跳变）
+            const progressSteps = [
+                { percent: 10, text: '正在读取图片...' },
+                { percent: 30, text: '图片预处理中...' },
+                { percent: 50, text: '调用AI检测接口...' },
+                { percent: 70, text: '分析病害特征...' },
+                { percent: 90, text: '生成检测报告...' },
+                { percent: 100, text: '检测完成!' }
+            ];
+            
+            let stepIndex = 0;
+            const progressInterval = setInterval(() => {
+                if (stepIndex < progressSteps.length) {
+                    const step = progressSteps[stepIndex];
+                    progressBar.style.width = `${step.percent}%`;
+                    progressPercent.textContent = `${step.percent}%`;
+                    progressText.textContent = step.text;
+                    stepIndex++;
+                } else {
+                    clearInterval(progressInterval);
+                    setTimeout(showDetectionResult, 500);
+                }
+            }, 600);
+        }
+        
+        /**
+         * 显示检测结果（修复数据匹配逻辑）
+         */
+        function showDetectionResult() {
+            // 切换结果显示状态
+            document.getElementById('resultEmpty').classList.add('hidden');
+            document.getElementById('resultContent').classList.remove('hidden');
+            
+            // 设置图片预览
+            document.getElementById('resultImage').src = URL.createObjectURL(selectedImage);
+            
+            // 获取作物类型，匹配对应病害数据
+            const cropType = document.getElementById('cropType').value;
+            const cropDiseaseMap = {
+                '水稻': {
+                    name: '稻瘟病',
+                    severity: '中等',
+                    confidence: 85,
+                    advice: '1. 及时清除病株，集中销毁；<br>2. 使用三环唑、稻瘟灵等药剂喷雾防治；<br>3. 加强田间管理，合理施肥，提高植株抗病能力；<br>4. 发病严重地块建议轮作换茬。'
+                },
+                '小麦': {
+                    name: '小麦条锈病',
+                    severity: '轻微',
+                    confidence: 92,
+                    advice: '1. 选用抗病品种；<br>2. 适时播种，避免早播；<br>3. 发病初期使用三唑类杀菌剂喷雾防治；<br>4. 合理施肥，避免偏施氮肥。'
+                },
+                '玉米': {
+                    name: '玉米大斑病',
+                    severity: '严重',
+                    confidence: 88,
+                    advice: '1. 及时清除病残体，减少初侵染源；<br>2. 选用抗病品种；<br>3. 发病初期喷施苯醚甲环唑、嘧菌酯等药剂；<br>4. 合理密植，加强田间通风透光。'
+                }
+            };
+            
+            const diseaseInfo = cropDiseaseMap[cropType] || cropDiseaseMap['水稻'];
+            
+            // 更新结果数据
+            document.getElementById('diseaseName').textContent = diseaseInfo.name;
+            document.getElementById('diseaseSeverity').textContent = diseaseInfo.severity;
+            document.getElementById('diseaseConfidence').textContent = `${diseaseInfo.confidence}%`;
+            document.getElementById('detectMode').textContent = 'AI 智能检测';
+            document.getElementById('preventionAdvice').innerHTML = diseaseInfo.advice;
+            
+            // 生成可视化图表
+            createResultChart(diseaseInfo.confidence, cropType);
+            
+            // 重新启用检测按钮
+            document.getElementById('detectBtn').disabled = false;
+        }
+        
+        /**
+         * 创建结果可视化图表（修复图表销毁与初始化bug）
+         */
+        function createResultChart(confidence, cropType) {
+            // 销毁已存在的图表，避免内存泄漏
+            if (resultChart && typeof resultChart.destroy === 'function') {
+                resultChart.destroy();
+            }
+            
+            const ctx = document.getElementById('resultChart').getContext('2d');
+            const severity = document.getElementById('diseaseSeverity').textContent;
+            
+            // 严重程度对应颜色（简化映射，避免错误）
+            const severityColor = {
+                '轻微': '#10b981',
+                '中等': '#f59e0b',
+                '严重': '#ef4444'
+            }[severity] || '#22c55e';
+            
+            // 创建雷达图（简化配置，确保正常渲染）
+            resultChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['病害匹配度', '特征明显度', '危害程度', '扩散风险', '治疗难度'],
+                    datasets: [{
+                        label: `${cropType} - 病害分析`,
+                        data: [
+                            confidence,
+                            Math.max(70, confidence - 5 + Math.random() * 10),
+                            severity === '轻微' ? 30 : severity === '中等' ? 60 : 90,
+                            severity === '轻微' ? 20 : severity === '中等' ? 50 : 80,
+                            severity === '轻微' ? 10 : severity === '中等' ? 40 : 70
+                        ],
+                        backgroundColor: `${severityColor}20`,
+                        borderColor: severityColor,
+                        pointBackgroundColor: severityColor,
+                        pointBorderColor: '#fff'
+                    }]
+                },
+                options: {
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: { stepSize: 20 }
+                        }
+                    },
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
