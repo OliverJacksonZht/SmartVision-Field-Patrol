@@ -4,24 +4,25 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>慧眼巡田 - 智慧农业病害检测系统</title>
-    <!-- 引入Tailwind CSS（CDN，确保稳定） -->
+    <!-- 引入依赖CDN：保留原有 + 新增压缩包/PDF处理库 -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入Chart.js（可视化，兼容所有现代浏览器） -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
-    <!-- 引入Font Awesome（图标，确保地址有效） -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     
-    <!-- 自定义Tailwind主题（仅配置颜色/字体，无自定义工具类） -->
+    <!-- 自定义Tailwind主题 -->
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        primary: '#22c55e', // 柔和农业绿
+                        primary: '#22c55e',
                         secondary: '#16a34a',
                         accent: '#f59e0b',
                         neutral: '#f8fafc',
-                        dark: '#1e293b'
+                        dark: '#1e293b',
+                        healthy: '#10b981' // 【新增】健康状态配色
                     },
                     fontFamily: {
                         sans: ['Inter', 'system-ui', 'sans-serif'],
@@ -31,294 +32,589 @@
         }
     </script>
     
-    <!-- 仅保留全局基础过渡，无其他自定义CSS -->
     <style>
         * {
             transition: all 0.2s ease-in-out;
         }
+        /* 页面切换过渡 */
+        .page {
+            display: none;
+        }
+        .page.active {
+            display: block;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        /* 历史记录卡片hover效果 */
+        .history-card:hover {
+            transform: translateY(-2px);
+        }
+        /* 步骤卡片样式 */
+        .step-card {
+            border-left: 3px solid #22c55e;
+        }
+        /* 新增：多图片预览网格样式 */
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 8px;
+            margin: 10px 0;
+        }
+        .image-preview-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e5e7eb;
+        }
+        .image-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .remove-img-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(239, 68, 68, 0.8);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+            z-index: 10;
+        }
+        /* 图片加载占位 */
+        .img-loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen flex flex-col">
-    <!-- 头部导航（简化，无冗余图标） -->
+    <!-- 头部导航：保留原有 -->
     <header class="bg-white shadow-sm sticky top-0 z-50">
         <div class="container mx-auto px-4 py-4 flex justify-between items-center">
             <div class="flex items-center gap-2">
                 <i class="fa-solid fa-leaf text-primary text-2xl"></i>
                 <h1 class="text-xl md:text-2xl font-bold text-dark">慧眼巡田</h1>
             </div>
-            <!-- 移动端菜单按钮 -->
             <button class="md:hidden text-dark text-xl" id="menuBtn">
                 <i class="fa-solid fa-bars"></i>
             </button>
-            <!-- 桌面端导航（简洁） -->
             <nav class="hidden md:flex gap-6">
-                <a href="#" class="text-dark hover:text-primary">首页</a>
-                <a href="#" class="text-dark hover:text-primary">检测历史</a>
-                <a href="#" class="text-dark hover:text-primary">使用指南</a>
+                <a href="#" class="text-dark hover:text-primary page-link" data-page="home">首页</a>
+                <a href="#" class="text-dark hover:text-primary page-link" data-page="detect">病害检测</a>
+                <a href="#" class="text-dark hover:text-primary page-link" data-page="history">检测历史</a>
+                <a href="#" class="text-dark hover:text-primary page-link" data-page="guide">使用指南</a>
             </nav>
         </div>
-        <!-- 移动端导航菜单（修复切换逻辑） -->
         <div id="mobileMenu" class="hidden bg-white shadow-md md:hidden">
             <div class="container mx-auto px-4 py-2 flex flex-col gap-3">
-                <a href="#" class="text-dark hover:text-primary py-2">首页</a>
-                <a href="#" class="text-dark hover:text-primary py-2">检测历史</a>
-                <a href="#" class="text-dark hover:text-primary py-2">使用指南</a>
+                <a href="#" class="text-dark hover:text-primary py-2 page-link" data-page="home">首页</a>
+                <a href="#" class="text-dark hover:text-primary py-2 page-link" data-page="detect">病害检测</a>
+                <a href="#" class="text-dark hover:text-primary py-2 page-link" data-page="history">检测历史</a>
+                <a href="#" class="text-dark hover:text-primary py-2 page-link" data-page="guide">使用指南</a>
             </div>
         </div>
     </header>
 
-    <!-- 主内容区（大幅留白，简洁布局） -->
-    <main class="flex-grow container mx-auto px-4 py-8 max-w-5xl">
-        <!-- 介绍区域（简洁引导） -->
-        <section class="mb-10 text-center">
-            <h2 class="text-2xl md:text-3xl font-bold mb-4 text-dark">农作物病害智能检测</h2>
-            <p class="text-gray-600 max-w-2xl mx-auto">上传作物图片，AI自动识别病害、评估严重程度，提供专业防治建议</p>
-        </section>
-
-        <!-- 检测核心区域（响应式，无杂乱样式） -->
-        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-            <!-- 上传区域（纯原生Tailwind样式，无@apply） -->
-            <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i class="fa-solid fa-upload text-primary"></i>
-                    上传检测图片
-                </h3>
-                
-                <!-- 上传区域（修复拖拽交互，纯原生样式） -->
-                <div id="uploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary mb-6">
-                    <input type="file" id="imageUpload" accept="image/jpeg,image/png" class="hidden">
-                    <i class="fa-solid fa-image text-4xl text-gray-400 mb-3"></i>
-                    <p class="text-gray-500 mb-2">点击或拖拽图片到此处上传</p>
-                    <p class="text-sm text-gray-400">支持 JPG、PNG，最大 10MB</p>
-                    <button type="button" class="mt-4 bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2" onclick="document.getElementById('imageUpload').click()">
-                        选择图片
-                    </button>
-                </div>
-                
-                <!-- 作物类型选择（优化样式，无冗余） -->
-                <div class="mb-6">
-                    <label class="block text-gray-700 mb-2">作物类型</label>
-                    <select id="cropType" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
-                        <option value="水稻" selected>水稻</option>
-                        <option value="小麦">小麦</option>
-                        <option value="玉米">玉米</option>
-                    </select>
-                </div>
-                
-                <!-- 检测按钮和进度（修复进度条逻辑） -->
-                <div class="flex flex-col gap-4">
-                    <button id="detectBtn" class="bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary w-full disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+    <!-- 主内容区：保留原有结构，仅修改检测页的上传/按钮区域 -->
+    <main class="flex-grow container mx-auto px-4 py-8 max-w-6xl">
+        <!-- 1. 首页界面：【修改】图片路径为相对路径 -->
+        <section id="home" class="page active">
+            <div class="bg-gradient-to-r from-primary/90 to-secondary/90 text-white rounded-2xl p-8 md:p-12 mb-12 bg-cover bg-center" style="background-image: url('./images/nt.png');">
+                <div class="max-w-3xl mx-auto text-center">
+                    <h2 class="text-3xl md:text-4xl font-bold mb-4">AI 赋能农业，精准识别病害</h2>
+                    <p class="text-lg md:text-xl mb-8 opacity-90">基于深度学习的农作物病害检测系统，助力农业生产提质增效</p>
+                    <button class="bg-white text-primary hover:bg-gray-100 py-3 px-8 rounded-lg font-semibold text-lg page-link" data-page="detect">
                         <i class="fa-solid fa-microscope mr-2"></i>开始检测
                     </button>
-                    
-                    <!-- 进度条区域（初始隐藏，纯原生样式） -->
-                    <div id="progressArea" class="hidden">
-                        <div class="flex justify-between text-sm mb-1">
-                            <span>检测进度</span>
-                            <span id="progressPercent">0%</span>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+                <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl text-center">
+                    <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fa-solid fa-brain text-primary text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-dark">AI 智能识别</h3>
+                    <p class="text-gray-600">基于海量数据集训练，精准识别多种农作物病害，准确率达95%以上</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl text-center">
+                    <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fa-solid fa-lightbulb text-primary text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-dark">专业防治建议</h3>
+                    <p class="text-gray-600">针对不同病害提供定制化防治方案，结合农业专家经验，科学指导生产</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl text-center">
+                    <div class="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i class="fa-solid fa-mobile-screen-button text-primary text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-semibold mb-3 text-dark">全端适配</h3>
+                    <p class="text-gray-600">支持电脑、手机、平板等多设备访问，田间地头随时检测，操作简单便捷</p>
+                </div>
+            </div>
+            <div class="mb-12">
+                <h3 class="text-2xl font-bold text-center mb-8 text-dark">支持检测的农作物</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg">
+                        <img src="./images/sd.png" alt="水稻" class="w-full h-48 object-cover">
+                        <div class="p-4 text-center">
+                            <h4 class="text-lg font-semibold text-dark">水稻</h4>
+                            <p class="text-gray-600 text-sm">识别稻瘟病、纹枯病、白叶枯病等12种常见病害</p>
                         </div>
-                        <div class="w-full bg-gray-200 rounded-full h-2.5">
-                            <div id="progressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg">
+                        <img src="./images/xm.png" alt="小麦" class="w-full h-48 object-cover">
+                        <div class="p-4 text-center">
+                            <h4 class="text-lg font-semibold text-dark">小麦</h4>
+                            <p class="text-gray-600 text-sm">识别条锈病、赤霉病、白粉病等10种常见病害</p>
                         </div>
-                        <p id="progressText" class="text-sm text-gray-600 mt-2 text-center">正在初始化检测...</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg">
+                        <img src="./images/ym.png" alt="玉米" class="w-full h-48 object-cover">
+                        <div class="p-4 text-center">
+                            <h4 class="text-lg font-semibold text-dark">玉米</h4>
+                            <p class="text-gray-600 text-sm">识别大斑病、小斑病、锈病等8种常见病害</p>
+                        </div>
                     </div>
                 </div>
             </div>
-            
-            <!-- 结果展示区域（优化可视化，修复图表bug） -->
-            <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
-                <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
-                    <i class="fa-solid fa-chart-pie text-primary"></i>
-                    检测结果
-                </h3>
-                
-                <!-- 结果初始化提示（简洁） -->
-                <div id="resultEmpty" class="flex flex-col items-center justify-center h-64 text-gray-400">
-                    <i class="fa-solid fa-file-circle-question text-5xl mb-4"></i>
-                    <p>上传图片并点击检测后，结果将显示在此处</p>
-                </div>
-                
-                <!-- 结果展示区域 (初始隐藏，修复布局) -->
-                <div id="resultContent" class="hidden">
-                    <!-- 图片预览 -->
-                    <div class="mb-4">
-                        <img id="resultImage" src="" alt="检测图片预览" class="w-full h-auto rounded-lg object-cover">
+        </section>
+
+        <!-- 2. 病害检测界面：核心修改区域（上传/预览/PDF按钮） -->
+        <section id="detect" class="page">
+            <section class="mb-10 text-center">
+                <h2 class="text-2xl md:text-3xl font-bold mb-4 text-dark">农作物病害智能检测</h2>
+                <p class="text-gray-600 max-w-2xl mx-auto">上传作物图片/压缩包，AI自动识别病害、评估严重程度，提供专业防治建议</p>
+            </section>
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+                <!-- 上传区域：修改为支持多选/压缩包，新增图片预览 -->
+                <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-upload text-primary"></i>
+                        上传检测图片/压缩包
+                    </h3>
+                    <div id="uploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-primary mb-6">
+                        <!-- 修改：新增multiple，支持zip压缩包，扩大大小限制到50MB -->
+                        <input type="file" id="imageUpload" accept="image/jpeg,image/png,application/zip,application/x-zip-compressed" multiple class="hidden">
+                        <i class="fa-solid fa-image text-4xl text-gray-400 mb-3"></i>
+                        <p class="text-gray-500 mb-2">点击或拖拽图片/压缩包到此处上传</p>
+                        <p class="text-sm text-gray-400">支持 JPG、PNG、ZIP，最大 50MB</p>
+                        <button type="button" class="mt-4 bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2" onclick="document.getElementById('imageUpload').click()">
+                            选择文件
+                        </button>
                     </div>
-                    
-                    <!-- 核心结果卡片（简洁网格，无杂乱） -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <p class="text-sm text-gray-500">病害名称</p>
-                            <p id="diseaseName" class="text-lg font-semibold text-dark">稻瘟病</p>
+                    <!-- 新增：图片预览区域（隐藏，选中文件后显示） -->
+                    <div id="previewArea" class="mb-6 hidden">
+                        <div class="flex justify-between items-center mb-2">
+                            <p class="text-gray-700 text-sm"><i class="fa-solid fa-images mr-1"></i>已选择 <span id="fileCount">0</span> 张图片</p>
+                            <button type="button" class="text-xs text-primary hover:text-secondary" onclick="clearAllFiles()">清空</button>
                         </div>
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <p class="text-sm text-gray-500">严重程度</p>
-                            <p id="diseaseSeverity" class="text-lg font-semibold text-accent">中等</p>
-                        </div>
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <p class="text-sm text-gray-500">置信度</p>
-                            <p id="diseaseConfidence" class="text-lg font-semibold text-primary">85%</p>
-                        </div>
-                        <div class="bg-gray-50 p-4 rounded-lg">
-                            <p class="text-sm text-gray-500">检测模式</p>
-                            <p id="detectMode" class="text-lg font-semibold text-secondary">AI 智能检测</p>
-                        </div>
+                        <div id="imageGrid" class="image-grid"></div>
                     </div>
-                    
-                    <!-- 可视化图表（修复销毁与初始化逻辑） -->
+                    <!-- 作物类型选择：保留原有 -->
                     <div class="mb-6">
-                        <canvas id="resultChart" width="400" height="200"></canvas>
+                        <label class="block text-gray-700 mb-2">作物类型</label>
+                        <select id="cropType" class="w-full p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                            <option value="水稻" selected>水稻</option>
+                            <option value="小麦">小麦</option>
+                            <option value="玉米">玉米</option>
+                            <option value="大豆">大豆</option>
+                            <option value="棉花">棉花</option>
+                        </select>
                     </div>
-                    
-                    <!-- 防治建议（简洁高亮） -->
-                    <div class="bg-primary/5 p-4 rounded-lg">
-                        <h4 class="font-semibold mb-2 flex items-center gap-2">
-                            <i class="fa-solid fa-shield-halved text-primary"></i>
-                            防治建议
-                        </h4>
-                        <p id="preventionAdvice" class="text-gray-700 text-sm">
-                            1. 及时清除病株，集中销毁；<br>
-                            2. 使用三环唑、稻瘟灵等药剂喷雾防治；<br>
-                            3. 加强田间管理，合理施肥，提高植株抗病能力；<br>
-                            4. 发病严重地块建议轮作换茬。
-                        </p>
+                    <!-- 按钮区域：新增PDF下载按钮、重置按钮 -->
+                    <div class="flex flex-col gap-3">
+                        <button id="detectBtn" class="bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary w-full disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+                            <i class="fa-solid fa-microscope mr-2"></i>开始检测
+                        </button>
+                        <button id="pdfBtn" class="bg-accent text-white py-2 px-6 rounded-lg hover:bg-amber-600 w-full hidden">
+                            <i class="fa-solid fa-file-pdf mr-2"></i>下载检测报告(PDF)
+                        </button>
+                        <div id="progressArea" class="hidden">
+                            <div class="flex justify-between text-sm mb-1">
+                                <span>检测进度</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div id="progressBar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                            <p id="progressText" class="text-sm text-gray-600 mt-2 text-center">正在初始化检测...</p>
+                        </div>
                     </div>
                 </div>
+                <!-- 结果展示区域：保留原有 -->
+                <div class="bg-white p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300">
+                    <h3 class="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-primary"></i>
+                        检测结果
+                    </h3>
+                    <div id="resultEmpty" class="flex flex-col items-center justify-center h-64 text-gray-400">
+                        <i class="fa-solid fa-file-circle-question text-5xl mb-4"></i>
+                        <p>上传图片并点击检测后，结果将显示在此处</p>
+                    </div>
+                    <div id="resultContent" class="hidden">
+                        <div class="mb-4">
+                            <img id="resultImage" src="" alt="检测图片预览" class="w-full h-auto rounded-lg object-cover">
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-500">病害名称</p>
+                                <p id="diseaseName" class="text-lg font-semibold text-dark">稻瘟病</p>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-500">严重程度</p>
+                                <p id="diseaseSeverity" class="text-lg font-semibold text-accent">中等</p>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-500">置信度</p>
+                                <p id="diseaseConfidence" class="text-lg font-semibold text-primary">85%</p>
+                            </div>
+                            <div class="bg-gray-50 p-4 rounded-lg">
+                                <p class="text-sm text-gray-500">检测模式</p>
+                                <p id="detectMode" class="text-lg font-semibold text-secondary">AI 智能检测</p>
+                            </div>
+                        </div>
+                        <div class="mb-6">
+                            <canvas id="resultChart" width="400" height="200"></canvas>
+                        </div>
+                        <div class="bg-primary/5 p-4 rounded-lg">
+                            <h4 class="font-semibold mb-2 flex items-center gap-2">
+                                <i class="fa-solid fa-shield-halved text-primary"></i>
+                                防治建议
+                            </h4>
+                            <p id="preventionAdvice" class="text-gray-700 text-sm">
+                                1. 及时清除病株，集中销毁；<br>
+                                2. 使用三环唑、稻瘟灵等药剂喷雾防治；<br>
+                                3. 加强田间管理，合理施肥，提高植株抗病能力；<br>
+                                4. 发病严重地块建议轮作换茬。
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </section>
+
+        <!-- 3. 检测历史界面：保留原有，修复图片显示为Base64（永久有效） -->
+        <section id="history" class="page">
+            <div class="mb-10 text-center">
+                <h2 class="text-2xl md:text-3xl font-bold mb-4 text-dark">检测历史记录</h2>
+                <p class="text-gray-600 max-w-2xl mx-auto">查看所有过往的病害检测记录，支持删除单条或清空全部记录</p>
+            </div>
+            <div class="flex justify-end mb-6">
+                <button id="clearAllHistory" class="bg-red-500 hover:bg-red-600 text-white py-2 px-4 rounded-lg flex items-center gap-2">
+                    <i class="fa-solid fa-trash"></i>
+                    清空全部记录
+                </button>
+            </div>
+            <div id="historyList" class="space-y-4">
+                <div id="emptyHistory" class="bg-white p-8 rounded-xl shadow-lg text-center text-gray-400">
+                    <i class="fa-solid fa-clock-rotate-left text-5xl mb-4"></i>
+                    <p>暂无检测历史记录，快去检测吧！</p>
+                </div>
+                <div id="historyItems" class="hidden space-y-4"></div>
+            </div>
+        </section>
+
+        <!-- 4. 使用指南界面：保留原有，新增PDF功能说明 -->
+        <section id="guide" class="page">
+            <div class="mb-10 text-center">
+                <h2 class="text-2xl md:text-3xl font-bold mb-4 text-dark">使用指南</h2>
+                <p class="text-gray-600 max-w-2xl mx-auto">快速掌握系统使用方法，高效完成农作物病害检测</p>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-10">
+                <h3 class="text-xl font-semibold mb-6 flex items-center gap-2 text-dark">
+                    <i class="fa-solid fa-list-ol text-primary"></i>
+                    病害检测流程
+                </h3>
+                <div class="space-y-6">
+                    <div class="step-card pl-6 py-2 bg-gray-50 rounded-lg">
+                        <h4 class="font-semibold text-lg mb-2">1. 选择作物类型</h4>
+                        <p class="text-gray-600">在检测页面的下拉框中，选择需要检测的农作物品种，目前支持水稻、小麦、玉米、大豆、棉花五种作物。</p>
+                    </div>
+                    <div class="step-card pl-6 py-2 bg-gray-50 rounded-lg">
+                        <h4 class="font-semibold text-lg mb-2">2. 上传病害图片/压缩包</h4>
+                        <p class="text-gray-600">点击上传区域或直接拖拽，支持多选JPG/PNG图片、ZIP压缩包（自动解压图片），大小不超过50MB。</p>
+                        <p class="text-gray-500 text-sm mt-1">拍摄建议：近距离拍摄病变叶片/果实，保证光照充足、对焦清晰，避免背景杂乱。</p>
+                    </div>
+                    <div class="step-card pl-6 py-2 bg-gray-50 rounded-lg">
+                        <h4 class="font-semibold text-lg mb-2">3. 开始AI检测</h4>
+                        <p class="text-gray-600">点击「开始检测」按钮，系统将自动进行图片分析、特征提取、病害匹配，整个过程约3-5秒。</p>
+                    </div>
+                    <div class="step-card pl-6 py-2 bg-gray-50 rounded-lg">
+                        <h4 class="font-semibold text-lg mb-2">4. 查看结果/下载PDF</h4>
+                        <p class="text-gray-600">检测完成后展示病害信息和防治建议，<span class="text-accent font-medium">上传图片数量>2张时自动显示PDF下载按钮</span>，可生成含所有图片和结果的报告。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-lg mb-10">
+                <h3 class="text-xl font-semibold mb-6 flex items-center gap-2 text-dark">
+                    <i class="fa-solid fa-question-circle text-primary"></i>
+                    常见问题解答
+                </h3>
+                <div class="space-y-4">
+                    <div class="border-b border-gray-100 pb-4">
+                        <h4 class="font-semibold mb-2">Q1: 为什么上传图片后检测失败？</h4>
+                        <p class="text-gray-600">可能原因：1. 图片模糊或病变特征不明显；2. 上传的不是目标作物的图片；3. 压缩包无有效图片/损坏。建议重新上传清晰的病变部位照片。</p>
+                    </div>
+                    <div class="border-b border-gray-100 pb-4">
+                        <h4 class="font-semibold mb-2">Q2: 检测历史记录会保存在哪里？</h4>
+                        <p class="text-gray-600">检测记录保存在当前浏览器的本地存储中，图片以Base64格式保存，刷新/重启浏览器后仍可查看，清空缓存则会删除。</p>
+                    </div>
+                    <div class="border-b border-gray-100 pb-4">
+                        <h4 class="font-semibold mb-2">Q3: 如何生成PDF检测报告？</h4>
+                        <p class="text-gray-600">上传<strong>2张以上有效图片</strong>并完成检测后，检测按钮下方会自动显示「下载检测报告(PDF)」按钮，点击即可生成含所有上传图片、病害信息、防治建议的PDF文件。</p>
+                    </div>
+                    <div>
+                        <h4 class="font-semibold mb-2">Q4: 压缩包上传有什么要求？</h4>
+                        <p class="text-gray-600">仅支持ZIP格式压缩包，内部仅需放入JPG/PNG图片（可嵌套文件夹），系统会自动提取所有有效图片，压缩包大小不超过50MB。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="text-xl font-semibold mb-6 flex items-center gap-2 text-dark">
+                    <i class="fa-solid fa-triangle-exclamation text-accent"></i>
+                    注意事项
+                </h3>
+                <ul class="space-y-2 text-gray-600">
+                    <li class="flex items-start gap-2">
+                        <i class="fa-solid fa-check-circle text-primary mt-1"></i>
+                        <span>本系统检测结果仅供参考，实际病虫害防治请结合田间实地情况，必要时咨询农业技术人员。</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i class="fa-solid fa-check-circle text-primary mt-1"></i>
+                        <span>PDF报告生成需要一点时间，请勿频繁点击，生成完成后会自动触发浏览器下载。</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i class="fa-solid fa-check-circle text-primary mt-1"></i>
+                        <span>请勿上传与农作物病害无关的文件，以免影响系统检测效率和准确性。</span>
+                    </li>
+                </ul>
             </div>
         </section>
     </main>
 
-    <!-- 页脚（简洁，无冗余信息） -->
+    <!-- 页脚：保留原有 -->
     <footer class="bg-dark text-white py-6">
         <div class="container mx-auto px-4 text-center text-gray-400 text-sm">
             © 2026 慧眼巡田 - 智慧农业病害检测系统 版权所有
         </div>
     </footer>
 
-    <!-- JavaScript 逻辑（修复所有已知bug，简化冗余代码） -->
+    <!-- JavaScript 逻辑：核心修改，保留所有原有功能，新增多选/压缩包/PDF逻辑 -->
     <script>
-        // 全局变量（精简，避免未定义）
-        let selectedImage = null;
+        // 全局变量：修改为数组存储多文件，新增检测结果缓存、PDF相关
+        let selectedFiles = []; // 存储所有有效图片文件（含解压后的）
         let resultChart = null;
+        let detectionResult = null; // 缓存检测结果，用于PDF生成
+        const HISTORY_STORAGE_KEY = 'cropDiseaseDetectionHistory';
+        const ALLOWED_IMG_TYPES = ['image/jpeg', 'image/png']; // 支持的图片类型
         
-        // DOM 加载完成后初始化（确保元素加载完毕）
+        // DOM 加载完成后初始化
         document.addEventListener('DOMContentLoaded', function() {
-            // 移动端菜单切换（修复toggle逻辑）
-            const menuBtn = document.getElementById('menuBtn');
-            const mobileMenu = document.getElementById('mobileMenu');
-            menuBtn.addEventListener('click', function() {
-                mobileMenu.classList.toggle('hidden');
+            // 原有：页面切换逻辑
+            const pageLinks = document.querySelectorAll('.page-link');
+            pageLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const targetPage = this.getAttribute('data-page');
+                    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+                    document.getElementById(targetPage).classList.add('active');
+                    document.getElementById('mobileMenu').classList.add('hidden');
+                    if (targetPage === 'history') renderHistoryList();
+                });
             });
-            
-            // 绑定元素（避免重复获取）
+            // 原有：移动端菜单
+            document.getElementById('menuBtn').addEventListener('click', function() {
+                document.getElementById('mobileMenu').classList.toggle('hidden');
+            });
+            // 原有：历史记录清空按钮
+            document.getElementById('clearAllHistory').addEventListener('click', function() {
+                if (confirm('确定要清空所有检测历史记录吗？此操作不可恢复！')) {
+                    localStorage.removeItem(HISTORY_STORAGE_KEY);
+                    renderHistoryList();
+                }
+            });
+
+            // 绑定核心元素：新增预览/PDF按钮
             const imageUpload = document.getElementById('imageUpload');
             const uploadArea = document.getElementById('uploadArea');
             const detectBtn = document.getElementById('detectBtn');
+            const pdfBtn = document.getElementById('pdfBtn');
             
-            // 点击上传区域触发文件选择（修复事件冒泡）
+            // 修复原代码：上传区域点击判断错误
             uploadArea.addEventListener('click', function(e) {
-                if (!e.target.tagName === 'BUTTON') {
+                if (e.target.tagName !== 'BUTTON' && !e.target.closest('BUTTON')) {
                     imageUpload.click();
                 }
             });
-            
-            // 拖拽上传（修复防默认行为，避免浏览器打开图片）
+            // 原有：拖拽上传
             uploadArea.addEventListener('dragover', function(e) {
                 e.preventDefault();
                 uploadArea.classList.add('border-primary', 'bg-primary/5');
             });
-            
             uploadArea.addEventListener('dragleave', function() {
                 uploadArea.classList.remove('border-primary', 'bg-primary/5');
             });
-            
             uploadArea.addEventListener('drop', function(e) {
                 e.preventDefault();
                 uploadArea.classList.remove('border-primary', 'bg-primary/5');
-                
                 if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    const file = e.dataTransfer.files[0];
-                    handleImageFile(file);
+                    handleFiles(Array.from(e.dataTransfer.files));
                 }
             });
-            
-            // 文件选择处理（修复文件验证逻辑）
+            // 修改：文件选择处理（支持多文件）
             imageUpload.addEventListener('change', function() {
                 if (this.files && this.files.length > 0) {
-                    const file = this.files[0];
-                    handleImageFile(file);
+                    handleFiles(Array.from(this.files));
                 }
             });
-            
-            // 检测按钮点击事件（绑定防抖）
+            // 原有：检测按钮点击
             detectBtn.addEventListener('click', startDetection);
+            // 新增：PDF下载按钮点击
+            pdfBtn.addEventListener('click', generatePDF);
+
+            // 初始化历史记录
+            renderHistoryList();
         });
-        
+
+        // ========== 新增核心：处理多文件/压缩包 ==========
         /**
-         * 处理上传的图片文件（修复大小与格式验证）
+         * 处理上传的文件（支持多图片、ZIP压缩包）
+         * @param {File[]} files - 上传的文件数组
          */
-        function handleImageFile(file) {
-            // 验证文件类型（仅保留常用格式，减少错误）
-            const allowedTypes = ['image/jpeg', 'image/png'];
-            if (!allowedTypes.includes(file.type)) {
-                alert('请上传有效的图片文件（JPG、PNG）');
-                return;
+        async function handleFiles(files) {
+            if (files.length === 0) return;
+            uploadArea.classList.add('bg-primary/5'); // 加载中状态
+            detectBtn.disabled = true;
+
+            for (const file of files) {
+                if (file.type === 'application/zip' || file.type === 'application/x-zip-compressed') {
+                    // 处理ZIP压缩包：解压并提取图片
+                    await handleZipFile(file);
+                } else if (ALLOWED_IMG_TYPES.includes(file.type)) {
+                    // 处理单张图片：验证大小（50MB）
+                    if (file.size > 50 * 1024 * 1024) {
+                        alert(`文件${file.name}超过50MB，已忽略`);
+                        continue;
+                    }
+                    selectedFiles.push(file);
+                } else {
+                    alert(`文件${file.name}格式不支持，仅支持JPG/PNG/ZIP`);
+                }
             }
-            
-            // 验证文件大小（缩小到10MB，降低加载压力）
-            if (file.size > 10 * 1024 * 1024) {
-                alert('图片大小不能超过10MB');
-                return;
-            }
-            
-            selectedImage = file;
-            
-            // 更新上传区域（简化HTML，避免冗余）
-            const uploadArea = document.getElementById('uploadArea');
-            uploadArea.innerHTML = `
-                <img src="${URL.createObjectURL(file)}" alt="预览图片" class="w-full h-auto rounded-lg mb-4">
-                <p class="text-gray-700 mb-2">已选择: ${file.name}</p>
-                <p class="text-sm text-gray-500">大小: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                <button type="button" class="mt-4 border border-primary text-primary py-2 px-6 rounded-lg hover:bg-primary/10" onclick="clearImage()">
-                    <i class="fa-solid fa-times mr-2"></i>重新选择
-                </button>
-            `;
-            
-            // 启用检测按钮
-            document.getElementById('detectBtn').disabled = false;
+
+            uploadArea.classList.remove('bg-primary/5');
+            updatePreviewArea(); // 更新图片预览
+            detectBtn.disabled = selectedFiles.length === 0; // 有文件则启用检测按钮
+            pdfBtn.classList.toggle('hidden', selectedFiles.length <= 2); // 图片>2显示PDF按钮
         }
-        
         /**
-         * 清除已选择的图片（修复重置逻辑）
+         * 处理ZIP压缩包，提取内部所有有效图片
+         * @param {File} zipFile - 上传的ZIP文件
          */
-        function clearImage() {
-            selectedImage = null;
+        async function handleZipFile(zipFile) {
+            try {
+                const jszip = new JSZip();
+                const zipContent = await jszip.loadAsync(zipFile);
+                // 遍历压缩包所有文件
+                for (const [filename, file] of Object.entries(zipContent.files)) {
+                    if (file.dir) continue; // 跳过文件夹
+                    // 匹配图片后缀：.jpg/.jpeg/.png（忽略大小写）
+                    if (/\.jpg$|\.jpeg$|\.png$/i.test(filename)) {
+                        const blob = await file.async('blob');
+                        // 转换为File对象，加入selectedFiles
+                        const imgFile = new File([blob], filename, {
+                            type: filename.endsWith('.png') ? 'image/png' : 'image/jpeg'
+                        });
+                        selectedFiles.push(imgFile);
+                    }
+                }
+                if (Object.keys(zipContent.files).length > 0 && selectedFiles.length === 0) {
+                    alert('压缩包中未找到有效图片（仅支持JPG/PNG）');
+                }
+            } catch (err) {
+                console.error('解压压缩包失败：', err);
+                alert('压缩包损坏或格式错误，无法解压');
+            }
+        }
+        /**
+         * 更新图片预览区域：生成预览网格，显示数量，绑定删除事件
+         */
+        function updatePreviewArea() {
+            const previewArea = document.getElementById('previewArea');
+            const imageGrid = document.getElementById('imageGrid');
+            const fileCount = document.getElementById('fileCount');
+            
+            if (selectedFiles.length === 0) {
+                previewArea.classList.add('hidden');
+                return;
+            }
+            // 显示预览区域，更新数量
+            previewArea.classList.remove('hidden');
+            fileCount.textContent = selectedFiles.length;
+            imageGrid.innerHTML = '';
+
+            // 生成每张图片的预览
+            selectedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const previewItem = document.createElement('div');
+                    previewItem.className = 'image-preview-item';
+                    previewItem.innerHTML = `
+                        <img src="${e.target.result}" alt="预览图${index+1}">
+                        <div class="remove-img-btn" data-index="${index}">×</div>
+                    `;
+                    imageGrid.appendChild(previewItem);
+                    // 绑定单张图片删除事件
+                    previewItem.querySelector('.remove-img-btn').addEventListener('click', function() {
+                        const idx = parseInt(this.getAttribute('data-index'));
+                        selectedFiles.splice(idx, 1);
+                        updatePreviewArea();
+                        document.getElementById('detectBtn').disabled = selectedFiles.length === 0;
+                        document.getElementById('pdfBtn').classList.toggle('hidden', selectedFiles.length <= 2);
+                    });
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+        /**
+         * 清空所有选中的文件（新增）
+         */
+        function clearAllFiles() {
+            selectedFiles = [];
             document.getElementById('imageUpload').value = '';
-            
-            // 重置上传区域
-            const uploadArea = document.getElementById('uploadArea');
-            uploadArea.innerHTML = `
-                <i class="fa-solid fa-image text-4xl text-gray-400 mb-3"></i>
-                <p class="text-gray-500 mb-2">点击或拖拽图片到此处上传</p>
-                <p class="text-sm text-gray-400">支持 JPG、PNG，最大 10MB</p>
-                <button type="button" class="mt-4 bg-primary text-white py-2 px-6 rounded-lg hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2" onclick="document.getElementById('imageUpload').click()">
-                    选择图片
-                </button>
-            `;
-            
-            // 禁用检测按钮，重置结果区域
+            updatePreviewArea();
             document.getElementById('detectBtn').disabled = true;
+            document.getElementById('pdfBtn').classList.add('hidden');
+            // 重置结果区域
             document.getElementById('resultEmpty').classList.remove('hidden');
             document.getElementById('resultContent').classList.add('hidden');
+            if (resultChart) resultChart.destroy();
+            resultChart = null;
+            detectionResult = null;
         }
-        
+
+        // ========== 原有：检测逻辑（核心修改：新增健康识别分支） ==========
         /**
-         * 开始检测流程（修复进度条动画逻辑）
+         * 开始检测流程：使用第一张图片作为检测样本
          */
         function startDetection() {
-            if (!selectedImage) return;
-            
-            // 显示进度区域，初始化进度
+            if (selectedFiles.length === 0) return;
             const progressArea = document.getElementById('progressArea');
             const progressBar = document.getElementById('progressBar');
             const progressPercent = document.getElementById('progressPercent');
@@ -327,9 +623,9 @@
             progressArea.classList.remove('hidden');
             progressBar.style.width = '0%';
             progressPercent.textContent = '0%';
-            document.getElementById('detectBtn').disabled = true;
-            
-            // 模拟检测进度（平滑过渡，无跳变）
+            detectBtn.disabled = true;
+
+            // 原有：模拟检测进度
             const progressSteps = [
                 { percent: 10, text: '正在读取图片...' },
                 { percent: 30, text: '图片预处理中...' },
@@ -338,7 +634,6 @@
                 { percent: 90, text: '生成检测报告...' },
                 { percent: 100, text: '检测完成!' }
             ];
-            
             let stepIndex = 0;
             const progressInterval = setInterval(() => {
                 if (stepIndex < progressSteps.length) {
@@ -353,90 +648,110 @@
                 }
             }, 600);
         }
-        
         /**
-         * 显示检测结果（修复数据匹配逻辑）
+         * 显示检测结果：【核心修改】新增健康识别逻辑，缓存结果、保存Base64图片到历史
          */
         function showDetectionResult() {
-            // 切换结果显示状态
-            document.getElementById('resultEmpty').classList.add('hidden');
-            document.getElementById('resultContent').classList.remove('hidden');
-            
-            // 设置图片预览
-            document.getElementById('resultImage').src = URL.createObjectURL(selectedImage);
-            
-            // 获取作物类型，匹配对应病害数据
+            const resultEmpty = document.getElementById('resultEmpty');
+            const resultContent = document.getElementById('resultContent');
+            const resultImage = document.getElementById('resultImage');
             const cropType = document.getElementById('cropType').value;
-            const cropDiseaseMap = {
-                '水稻': {
-                    name: '稻瘟病',
-                    severity: '中等',
-                    confidence: 85,
-                    advice: '1. 及时清除病株，集中销毁；<br>2. 使用三环唑、稻瘟灵等药剂喷雾防治；<br>3. 加强田间管理，合理施肥，提高植株抗病能力；<br>4. 发病严重地块建议轮作换茬。'
-                },
-                '小麦': {
-                    name: '小麦条锈病',
-                    severity: '轻微',
-                    confidence: 92,
-                    advice: '1. 选用抗病品种；<br>2. 适时播种，避免早播；<br>3. 发病初期使用三唑类杀菌剂喷雾防治；<br>4. 合理施肥，避免偏施氮肥。'
-                },
-                '玉米': {
-                    name: '玉米大斑病',
-                    severity: '严重',
-                    confidence: 88,
-                    advice: '1. 及时清除病残体，减少初侵染源；<br>2. 选用抗病品种；<br>3. 发病初期喷施苯醚甲环唑、嘧菌酯等药剂；<br>4. 合理密植，加强田间通风透光。'
+            resultEmpty.classList.add('hidden');
+            resultContent.classList.remove('hidden');
+
+            // 使用第一张图片展示结果，转换为Base64（永久有效，替代原临时URL）
+            const firstFile = selectedFiles[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                resultImage.src = e.target.result;
+                // 原有：病害数据映射
+                const cropDiseaseMap = {
+                    '水稻': { name: '稻瘟病', severity: '中等', confidence: 85, advice: '1. 及时清除病株，集中销毁；<br>2. 使用三环唑、稻瘟灵等药剂喷雾防治；<br>3. 加强田间管理，合理施肥，提高植株抗病能力；<br>4. 发病严重地块建议轮作换茬。' },
+                    '小麦': { name: '小麦条锈病', severity: '轻微', confidence: 92, advice: '1. 选用抗病品种；<br>2. 适时播种，避免早播；<br>3. 发病初期使用三唑类杀菌剂喷雾防治；<br>4. 合理施肥，避免偏施氮肥。' },
+                    '玉米': { name: '玉米大斑病', severity: '严重', confidence: 88, advice: '1. 及时清除病残体，减少初侵染源；<br>2. 选用抗病品种；<br>3. 发病初期喷施苯醚甲环唑、嘧菌酯等药剂；<br>4. 合理密植，加强田间通风透光。' },
+                    '大豆': { name: '大豆根腐病', severity: '中等', confidence: 89, advice: '1. 选用抗病品种，轮作倒茬；<br>2. 播种前用咯菌腈拌种处理；<br>3. 田间及时排水，避免积水；<br>4. 发病后喷施多菌灵、福美双等药剂灌根。' },
+                    '棉花': { name: '棉花黄萎病', severity: '严重', confidence: 91, advice: '1. 选用抗病品种，实行轮作；<br>2. 定植前用多菌灵对土壤消毒；<br>3. 发病初期喷施甲基硫菌灵、恶霉灵等药剂；<br>4. 及时清除病株，减少传播源。' }
+                };
+                // 【核心新增】健康识别逻辑：40%概率为健康（演示用，后续替换为AI接口返回值即可）
+                const isHealthy = Math.random() > 0.6; 
+                if (isHealthy) {
+                    // 健康状态：更新页面DOM
+                    document.getElementById('diseaseName').textContent = '无病害（健康）';
+                    document.getElementById('diseaseSeverity').textContent = '无';
+                    document.getElementById('diseaseConfidence').textContent = '99%';
+                    document.getElementById('preventionAdvice').innerHTML = '该作物叶片/果实无病害特征，生长状态良好！<br>建议继续加强田间常规管理，合理水肥、及时除草，预防病虫害发生。';
+                    // 缓存健康结果
+                    detectionResult = {
+                        name: '无病害（健康）',
+                        severity: '无',
+                        confidence: 99,
+                        cropType,
+                        imageBase64: e.target.result,
+                        isHealthy: true,
+                        advice: '该作物叶片/果实无病害特征，生长状态良好！建议继续加强田间常规管理，合理水肥、及时除草，预防病虫害发生。'
+                    };
+                    // 生成健康状态的图表
+                    createResultChart(99, cropType, true);
+                } else {
+                    // 病害状态：原有逻辑
+                    const diseaseInfo = cropDiseaseMap[cropType] || cropDiseaseMap['水稻'];
+                    detectionResult = { ...diseaseInfo, cropType, imageBase64: e.target.result, isHealthy: false }; // 缓存结果用于PDF
+                    // 更新页面结果
+                    document.getElementById('diseaseName').textContent = diseaseInfo.name;
+                    document.getElementById('diseaseSeverity').textContent = diseaseInfo.severity;
+                    document.getElementById('diseaseConfidence').textContent = `${diseaseInfo.confidence}%`;
+                    document.getElementById('preventionAdvice').innerHTML = diseaseInfo.advice;
+                    // 生成病害状态的图表
+                    createResultChart(diseaseInfo.confidence, cropType, false);
                 }
+
+                // 保存历史记录：兼容健康/病害状态
+                saveDetectionRecord({
+                    cropType,
+                    diseaseName: detectionResult.name,
+                    severity: detectionResult.severity,
+                    confidence: detectionResult.confidence,
+                    detectMode: 'AI 智能检测',
+                    advice: detectionResult.advice.replace(/<br>/g, ' '),
+                    imageBase64: e.target.result // 替换原临时URL，永久有效
+                });
+                // 重新启用按钮
+                document.getElementById('detectBtn').disabled = false;
+                document.getElementById('progressArea').classList.add('hidden');
             };
-            
-            const diseaseInfo = cropDiseaseMap[cropType] || cropDiseaseMap['水稻'];
-            
-            // 更新结果数据
-            document.getElementById('diseaseName').textContent = diseaseInfo.name;
-            document.getElementById('diseaseSeverity').textContent = diseaseInfo.severity;
-            document.getElementById('diseaseConfidence').textContent = `${diseaseInfo.confidence}%`;
-            document.getElementById('detectMode').textContent = 'AI 智能检测';
-            document.getElementById('preventionAdvice').innerHTML = diseaseInfo.advice;
-            
-            // 生成可视化图表
-            createResultChart(diseaseInfo.confidence, cropType);
-            
-            // 重新启用检测按钮
-            document.getElementById('detectBtn').disabled = false;
+            reader.readAsDataURL(firstFile);
         }
-        
         /**
-         * 创建结果可视化图表（修复图表销毁与初始化bug）
+         * 【修改】创建雷达图：兼容健康/病害状态的配色
+         * @param {number} confidence - 置信度
+         * @param {string} cropType - 作物类型
+         * @param {boolean} isHealthy - 是否健康
          */
-        function createResultChart(confidence, cropType) {
-            // 销毁已存在的图表，避免内存泄漏
-            if (resultChart && typeof resultChart.destroy === 'function') {
-                resultChart.destroy();
-            }
-            
+        function createResultChart(confidence, cropType, isHealthy) {
+            if (resultChart) resultChart.destroy();
             const ctx = document.getElementById('resultChart').getContext('2d');
             const severity = document.getElementById('diseaseSeverity').textContent;
-            
-            // 严重程度对应颜色（简化映射，避免错误）
-            const severityColor = {
-                '轻微': '#10b981',
-                '中等': '#f59e0b',
-                '严重': '#ef4444'
-            }[severity] || '#22c55e';
-            
-            // 创建雷达图（简化配置，确保正常渲染）
+            // 健康状态用绿色，病害按原有严重程度配色
+            const severityColor = isHealthy 
+                ? '#10b981' 
+                : { '轻微': '#10b981', '中等': '#f59e0b', '严重': '#ef4444' }[severity] || '#22c55e';
+            // 健康状态的雷达图数据（各项指标优）
+            const data = isHealthy 
+                ? [99, 95, 10, 5, 5] 
+                : [
+                    confidence,
+                    Math.max(70, confidence - 5 + Math.random() * 10),
+                    severity === '轻微' ? 30 : severity === '中等' ? 60 : 90,
+                    severity === '轻微' ? 20 : severity === '中等' ? 50 : 80,
+                    severity === '轻微' ? 10 : severity === '中等' ? 40 : 70
+                ];
             resultChart = new Chart(ctx, {
                 type: 'radar',
                 data: {
                     labels: ['病害匹配度', '特征明显度', '危害程度', '扩散风险', '治疗难度'],
                     datasets: [{
-                        label: `${cropType} - 病害分析`,
-                        data: [
-                            confidence,
-                            Math.max(70, confidence - 5 + Math.random() * 10),
-                            severity === '轻微' ? 30 : severity === '中等' ? 60 : 90,
-                            severity === '轻微' ? 20 : severity === '中等' ? 50 : 80,
-                            severity === '轻微' ? 10 : severity === '中等' ? 40 : 70
-                        ],
+                        label: `${cropType} - ${isHealthy ? '健康分析' : '病害分析'}`,
+                        data: data,
                         backgroundColor: `${severityColor}20`,
                         borderColor: severityColor,
                         pointBackgroundColor: severityColor,
@@ -444,15 +759,189 @@
                     }]
                 },
                 options: {
-                    scales: {
-                        r: {
-                            beginAtZero: true,
-                            max: 100,
-                            ticks: { stepSize: 20 }
-                        }
-                    },
+                    scales: { r: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } } },
                     plugins: { legend: { position: 'bottom' } }
                 }
+            });
+        }
+
+        // ========== 原有：历史记录逻辑（修改为Base64图片显示，兼容健康状态） ==========
+        function saveDetectionRecord(record) {
+            let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+            history.unshift({ id: Date.now(), ...record, createTime: new Date().toLocaleString() });
+            if (history.length > 20) history = history.slice(0, 20); // 限制最多20条
+            localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+        }
+        function renderHistoryList() {
+            const emptyHistory = document.getElementById('emptyHistory');
+            const historyItems = document.getElementById('historyItems');
+            const history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+            historyItems.innerHTML = '';
+
+            if (history.length === 0) {
+                emptyHistory.classList.remove('hidden');
+                historyItems.classList.add('hidden');
+            } else {
+                emptyHistory.classList.add('hidden');
+                historyItems.classList.remove('hidden');
+                history.forEach(record => {
+                    // 【修改】兼容健康状态的样式
+                    const severityClass = record.severity === '无'
+                        ? 'bg-healthy-100 text-healthy-800'
+                        : {
+                            '轻微': 'bg-green-100 text-green-800',
+                            '中等': 'bg-yellow-100 text-yellow-800',
+                            '严重': 'bg-red-100 text-red-800'
+                        }[record.severity] || 'bg-gray-100 text-gray-800';
+                    const card = document.createElement('div');
+                    card.className = 'history-card bg-white p-6 rounded-xl shadow-lg border-l-4 border-primary';
+                    // 修改：图片使用imageBase64，新增图片预览
+                    card.innerHTML = `
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h4 class="text-lg font-semibold text-dark">${record.cropType} - ${record.diseaseName}</h4>
+                                <p class="text-sm text-gray-500">检测时间：${record.createTime}</p>
+                            </div>
+                            <span class="px-3 py-1 rounded-full text-xs font-medium ${severityClass}">${record.severity || '健康'}</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <div><p class="text-xs text-gray-500">置信度</p><p class="font-medium">${record.confidence}%</p></div>
+                            <div><p class="text-xs text-gray-500">检测模式</p><p class="font-medium">${record.detectMode}</p></div>
+                        </div>
+                        <!-- 新增：历史记录图片预览 -->
+                        <div class="mb-4">
+                            <img src="${record.imageBase64}" alt="检测图片" class="w-full h-32 object-cover rounded-lg">
+                        </div>
+                        <div class="mb-4">
+                            <p class="text-xs text-gray-500 mb-1">防治建议</p>
+                            <p class="text-sm text-gray-700 line-clamp-2">${record.advice}</p>
+                        </div>
+                        <div class="flex justify-end">
+                            <button class="delete-history-btn text-red-500 hover:text-red-600 flex items-center gap-1 text-sm" data-id="${record.id}">
+                                <i class="fa-solid fa-trash"></i> 删除记录
+                            </button>
+                        </div>
+                    `;
+                    historyItems.appendChild(card);
+                });
+                // 绑定删除按钮
+                document.querySelectorAll('.delete-history-btn').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const recordId = parseInt(this.getAttribute('data-id'));
+                        deleteHistoryRecord(recordId);
+                    });
+                });
+            }
+        }
+        function deleteHistoryRecord(recordId) {
+            if (confirm('确定要删除这条检测记录吗？')) {
+                let history = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+                history = history.filter(record => record.id !== recordId);
+                localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+                renderHistoryList();
+            }
+        }
+
+        // ========== 新增核心：PDF生成功能（图片>2时可用，兼容健康状态） ==========
+        /**
+         * 生成PDF检测报告：包含检测信息、所有上传图片、防治建议
+         */
+        async function generatePDF() {
+            if (!detectionResult || selectedFiles.length <= 2) {
+                alert('请完成检测且上传图片数量超过2张后再生成PDF！');
+                return;
+            }
+            // 显示加载提示
+            const progressArea = document.getElementById('progressArea');
+            const progressText = document.getElementById('progressText');
+            progressArea.classList.remove('hidden');
+            progressText.textContent = '正在生成PDF报告...';
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const pageWidth = 210; // A4宽度
+                const pageHeight = 297; // A4高度
+                let yPos = 20; // 初始Y坐标
+
+                // 1. PDF标题
+                doc.setFontSize(18);
+                doc.setFont('helvetica', 'bold');
+                const title = `${detectionResult.cropType}${detectionResult.isHealthy ? '健康检测' : '病害检测'}报告`;
+                doc.text(title, (pageWidth - doc.getTextWidth(title)) / 2, yPos);
+                yPos += 15;
+
+                // 2. 检测基本信息
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'normal');
+                doc.text(`检测时间：${new Date().toLocaleString()}`, 20, yPos); yPos += 10;
+                doc.text(`作物类型：${detectionResult.cropType}`, 20, yPos); yPos += 10;
+                doc.text(`病害名称：${detectionResult.name}`, 20, yPos); yPos += 10;
+                doc.text(`严重程度：${detectionResult.severity}`, 20, yPos); yPos += 10;
+                doc.text(`识别置信度：${detectionResult.confidence}%`, 20, yPos); yPos += 20;
+
+                // 3. 防治/管理建议
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.text(detectionResult.isHealthy ? '田间管理建议：' : '防治建议：', 20, yPos); yPos += 10;
+                doc.setFontSize(12);
+                doc.setFont('helvetica', 'normal');
+                const adviceLines = detectionResult.advice.split('<br>').map(line => line.trim()).filter(line => line);
+                adviceLines.forEach(line => {
+                    if (yPos + 10 > pageHeight) { doc.addPage(); yPos = 20; } // 分页
+                    doc.text(line, 25, yPos); yPos += 8;
+                });
+                yPos += 15;
+
+                // 4. 所有上传的图片（按网格排列，最多9张避免PDF过大）
+                doc.setFontSize(14);
+                doc.setFont('helvetica', 'bold');
+                doc.text(`检测图片（共${selectedFiles.length}张）：`, 20, yPos); yPos += 15;
+                const imgWidth = 55; // 图片宽度
+                const imgHeight = 40; // 图片高度
+                const imgMargin = 10; // 图片间距
+                let xPos = 20;
+                const maxImgs = 9;
+                const imgsToShow = selectedFiles.slice(0, maxImgs);
+
+                for (let i = 0; i < imgsToShow.length; i++) {
+                    // 分页判断
+                    if (yPos + imgHeight > pageHeight) { doc.addPage(); yPos = 20; xPos = 20; }
+                    // 行满换行
+                    if (xPos + imgWidth > pageWidth - 20) { xPos = 20; yPos += imgHeight + 10; }
+                    // 转换图片为Base64并添加到PDF
+                    const base64 = await fileToBase64(imgsToShow[i]);
+                    doc.addImage(base64, 'JPEG', xPos, yPos, imgWidth, imgHeight);
+                    // 图片序号
+                    doc.setFontSize(10);
+                    doc.text(`图${i+1}`, xPos, yPos + imgHeight + 8);
+                    xPos += imgWidth + imgMargin;
+                }
+
+                // 保存PDF：文件名带时间戳，区分健康/病害
+                const fileName = detectionResult.isHealthy 
+                    ? `农作物健康检测报告_${new Date().getTime()}.pdf`
+                    : `农作物病害检测报告_${new Date().getTime()}.pdf`;
+                doc.save(fileName);
+            } catch (err) {
+                console.error('PDF生成失败：', err);
+                alert('PDF报告生成失败，请重试！');
+            } finally {
+                // 隐藏加载提示
+                progressArea.classList.add('hidden');
+            }
+        }
+        /**
+         * 工具函数：File转Base64
+         * @param {File} file - 图片文件
+         * @returns {Promise<string>} Base64字符串
+         */
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = e => resolve(e.target.result);
+                reader.onerror = e => reject(e);
+                reader.readAsDataURL(file);
             });
         }
     </script>
